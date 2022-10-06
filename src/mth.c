@@ -1,5 +1,18 @@
-#include "mth.h"
+/**
+ * @file    mth.c
+ * @author  Jan Tomassi
+ * @version V0.0.1
+ * @date    02/10/2022
+ * @brief   Math Function
+ */
 
+#include "mth.h"
+/**
+ * @addtogroup VGA-Interface
+ * @{
+ * @addtogroup Math
+ * @{
+ */
 static const i16 SineTable[360] __attribute__((aligned(32))) =
 	{
 		0, 174, 348, 523, 697, 871, 1045, 1218, 1391,
@@ -76,3 +89,5 @@ i16 mthCos(u16 angle)
 
 	return SineTable[a];
 }
+///@}
+///@}

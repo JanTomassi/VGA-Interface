@@ -1,5 +1,10 @@
 #include "demo.h"
-
+/**
+ * @addtogroup VGA-Interface
+ * @{
+ * @addtogroup Example
+ * @{
+ */
 const u8 deBadBoys1[] = {0x00, 0x00,
 						 0x00, 0x00,
 						 0x07, 0xc0,
@@ -29,17 +34,15 @@ const u8 deBadBoys2[] = {0x00, 0x00,
 void demoInit(void)
 {
 	vidClearScreen();
-	sysTickCountS(5);
 	gdiRectangle(0, 0, (VID_PIXELS_X - 1), VID_VSIZE - 1, 0);
-	gdiDrawTextEx(100, 40, (pu8) "VGA-INTERFACE", GDI_ROP_COPY);
-	gdiDrawTextEx(100, 55, (pu8) "STM32F4-DISCOVERY", GDI_ROP_COPY);
+	sysTickDelayS(5);
+	gdiDrawTextEx(100, 40, (pu8) "VGA-INTERFACE", GDI_ROP_COPY, GDI_LEFT_ALIGN);
+	sysTickDelayS(1);
+	gdiDrawTextEx(100, 55, (pu8) "STM32F4-DISCOVERY", GDI_ROP_COPY, GDI_LEFT_ALIGN);
 
-	gdiDrawTextEx(100, 70, (pu8) "WWW.GITHUB.COM/JANTOMASSI", GDI_ROP_COPY);
-	gdiDrawTextEx(100, 85, (pu8) "JAN TOMASSI", GDI_ROP_COPY);
-
-	while (1)
-	{
-	};
+	sysTickDelayS(1);
+	gdiDrawTextEx(CHAR_ON_SCREEN_X(0), CHAR_ON_SCREEN_Y(74), (pu8) "www.github.com/JanTomassi", GDI_ROP_COPY, GDI_RIGHT_ALIGN);
+	gdiDrawTextEx(CHAR_ON_SCREEN_X(0), CHAR_ON_SCREEN_Y(74), (pu8) "Jan Tomassi", GDI_ROP_COPY, GDI_LEFT_ALIGN);
 }
 
 /**
@@ -62,3 +65,5 @@ void srand(unsigned int seed)
 	next = seed;
 }
 /**@}*/
+///@}
+///@}

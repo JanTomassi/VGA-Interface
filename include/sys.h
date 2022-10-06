@@ -16,8 +16,8 @@
 //	Function definitions
 void SystemInit(void); // borrowing the STM32F4 system init routines
 u8 sysInitSystemTimer(void);
-void sysTickCount();
-void sysTickCountN(vu32 n);
-void sysTickCountS(vu32 n);
+void sysTickDelay();
+void sysTickDelayN(vu32 n);
+void sysTickDelayS(vu32 n);
 
 #endif // __SYS_H

@@ -1,16 +1,30 @@
+/**
+ * @file    gdi.c
+ * @author  Jan Tomassi
+ * @version V0.0.1
+ * @date    02/10/2022
+ * @brief   Graphics
+ */
+
 #include "stm32f4_discovery.h"
 
 #include "gdi.h"
 #include "mth.h"
 #include "video.h"
 #include "string.h"
+#include "font8x8.h"
 
+/**
+ * @addtogroup VGA-Interface
+ * @{
+ * @addtogroup Graphics
+ * @{
+ */
 #ifndef NULL
 #define NULL 0
 #endif
 
 extern u8 fb[VID_VSIZE][VID_HSIZE + 2];
-extern const u8 gdiSystemFont[];
 
 const u8 gdiCloseBm[] = {0x7f, 0xC0,
 						 0x7f, 0xC0,
@@ -77,14 +91,14 @@ void gdiCopyRect(PGDI_RECT rc1, PGDI_RECT rc2)
  *
  *	@retval			none
  */
-void gdiBitBlt(PGDI_RECT prc, i16 x, i16 y, i16 w, i16 h, pu8 bm, u16 rop)
+void gdiBitBlt(i16 x, i16 y, i16 w, i16 h, pu8 bm, u16 rop)
 {
 
 	u16 i, xz, xb, xt;
-	u32 wb; // Width in bytes
-	u32 r;	// Start X position in bits (relative to x)
-	u32 k;
-	u32 d;
+	u32 wb;			// Width in bytes
+	u32 bit_number; // Start X position in bits (relative to x)
+	u32 fb_offs_in_ram;
+	u32 byte_number;
 	u32 offs;
 	u8 c;
 	pu8 fbPtr; // Pointer to the Frame Buffer Bit-Band area
@@ -94,70 +108,32 @@ void gdiBitBlt(PGDI_RECT prc, i16 x, i16 y, i16 w, i16 h, pu8 bm, u16 rop)
 	u32 rp;
 	pu8 bmPtr; // Pointer to the bitmap bits
 
-	//	Calculate clipping region
-
-	if (prc != NULL)
-	{
-		x = prc->x + x;
-		y = prc->y + y;
-	}
-
 	//	Get total bitmap width in bytes
-
 	wb = (u32)w >> 3;
 	if ((wb << 3) < (u32)w)
 		++wb;
+	xt = w;
 
 	//	Get starting bit inside the first byte
-
-	d = (u32)x >> 3;
-	r = ((u32)x - (d << 3));
-
-	//	Clip X
-
-	if (prc == NULL)
-	{
-		if ((x + w) >= VID_PIXELS_X)
-		{
-			xt = VID_PIXELS_X - x;
-		}
-		else
-		{
-			xt = w;
-		}
-	}
-	else
-	{
-		if ((x + w) >= (x + prc->w))
-		{
-			xt = prc->w - x;
-		}
-		else
-		{
-			xt = w;
-		}
-	}
+	byte_number = (u32)x >> 3;
+	bit_number = ((u32)x - (byte_number << 3));
 
 	//	Draw bits
-
 	for (i = 0; i < h; i++)
 	{
 
 		//	Clip Y
-
 		if ((i + y) > (VID_VSIZE - 1))
 			return;
 
 		//	Get offset to frame buffer in bit-banding mode
-
 		offs = (((u32)x >> 3)) + ((u32)(y + i) * VID_HSIZE_R);
-		k = (u32)(&fb - 0x20000000);
-		k += offs;
-		fbPtr = (pu8)(0x22000000 + (k * 32) + ((7 - r) * 4));
-		fbBak = (pu8)(0x22000000 + (k * 32) + 28);
+		fb_offs_in_ram = (u32)(&fb - 0x20000000);
+		fb_offs_in_ram += offs;
+		fbPtr = (pu8)(0x22000000 + (fb_offs_in_ram * 32) + ((7 - bit_number) * 4));
+		fbBak = (pu8)(0x22000000 + (fb_offs_in_ram * 32) + 28);
 
 		//	Get offset to bitmap bits
-
 		bmPtr = bm + ((u32)i * wb);
 		xz = w;
 
@@ -171,7 +147,7 @@ void gdiBitBlt(PGDI_RECT prc, i16 x, i16 y, i16 w, i16 h, pu8 bm, u16 rop)
 				++bmPtr;
 			}
 			xb &= 0x07;
-			(c & 0x80) ? (rp = 1) : (rp = 0);
+			(c & 0x1) ? (rp = 1) : (rp = 0);
 			switch (rop)
 			{
 			case GDI_ROP_COPY:
@@ -194,7 +170,7 @@ void gdiBitBlt(PGDI_RECT prc, i16 x, i16 y, i16 w, i16 h, pu8 bm, u16 rop)
 				fbPtr = fbBak + 32;
 				fbBak = fbPtr;
 			}
-			c <<= 1;
+			c >>= 1;
 		}
 	}
 }
@@ -257,28 +233,28 @@ void gdiPoint(PGDI_RECT rc, u16 x, u16 y, u16 rop)
  *
  *	@retval	none
  */
-void gdiLine(PGDI_RECT prc, i16 x1, i16 y1, i16 x2, i16 y2, u16 rop)
+void gdiLine(PGDI_RECT prc, i16 x0, i16 y0, i16 x1, i16 y1, u16 rop)
 {
 
 	i16 dx, dy, i, e;
 	i16 incx, incy, inc1, inc2;
 	i16 x, y;
 
-	dx = x2 - x1;
-	dy = y2 - y1;
+	dx = x1 - x0;
+	dy = y1 - y0;
 
 	if (dx < 0)
 		dx = -dx;
 	if (dy < 0)
 		dy = -dy;
 	incx = 1;
-	if (x2 < x1)
+	if (x1 < x0)
 		incx = -1;
 	incy = 1;
-	if (y2 < y1)
+	if (y1 < y0)
 		incy = -1;
-	x = x1;
-	y = y1;
+	x = x0;
+	y = y0;
 
 	if (dx > dy)
 	{
@@ -424,7 +400,7 @@ void gdiDrawText(PGDI_RECT prc, pu8 ptext, u16 style, u16 rop)
 		{
 			pos = (u16)(c - GDI_SYSFONT_OFFSET) * GDI_SYSFONT_BYTEWIDTH * GDI_SYSFONT_HEIGHT;
 			ptx = ((pu8)gdiSystemFont) + pos;
-			gdiBitBlt(prc, xp, 0, GDI_SYSFONT_WIDTH, GDI_SYSFONT_HEIGHT, ptx, rop);
+			gdiBitBlt(xp, 0, GDI_SYSFONT_WIDTH, GDI_SYSFONT_HEIGHT, ptx, rop);
 			xp += GDI_SYSFONT_WIDTH;
 			if (xp >= ((prc->x + prc->w) - GDI_SYSFONT_WIDTH))
 				return;
@@ -442,63 +418,38 @@ void gdiDrawText(PGDI_RECT prc, pu8 ptext, u16 style, u16 rop)
  *
  *	@retval			none
  */
-void gdiDrawTextEx(i16 x, i16 y, pu8 ptext, u16 rop)
+void gdiDrawTextEx(i16 x, i16 y, pu8 ptext, u16 rop, uint8_t alignment)
 {
 	u16 l, i, pos, xp;
 	u8 c;
 	pu8 ptx;
 
 	l = strlen(ptext);
-	xp = x;
+	if (alignment == GDI_LEFT_ALIGN)
+		xp = x;
+	else if (alignment == GDI_RIGHT_ALIGN)
+		xp = VID_PIXELS_X - (x + (l * GDI_SYSFONT_WIDTH));
+	else
+		xp = x;
+
 	for (i = 0; i < l; i++)
 	{
 		c = *(ptext++);
 		if (c >= GDI_SYSFONT_OFFSET)
 		{
-			pos = (u16)(c - GDI_SYSFONT_OFFSET) * GDI_SYSFONT_BYTEWIDTH * GDI_SYSFONT_HEIGHT;
+			pos = (u16)(c)*GDI_SYSFONT_BYTEWIDTH * GDI_SYSFONT_HEIGHT;
 			ptx = ((pu8)gdiSystemFont) + pos;
-			gdiBitBlt(NULL, xp, y, GDI_SYSFONT_WIDTH, GDI_SYSFONT_HEIGHT, ptx, rop);
-			xp += GDI_SYSFONT_WIDTH;
+			gdiBitBlt(xp, y, GDI_SYSFONT_WIDTH, GDI_SYSFONT_HEIGHT, ptx, rop);
+
+			if (alignment == GDI_LEFT_ALIGN)
+				xp += GDI_SYSFONT_WIDTH;
+			else if (alignment == GDI_RIGHT_ALIGN)
+				xp += GDI_SYSFONT_WIDTH;
+
 			if (xp >= VID_PIXELS_X)
 				return;
 		}
 	}
 }
-/**
- *	@brief Draw window
- *
- *	@param	pwin	Pointer to windows struct
- *
- *	@retval	none
- */
-void gdiDrawWindow(PGDI_WINDOW pwin)
-{
-
-	i16 i;
-	GDI_RECT rc, rt;
-
-	gdiCopyRect(&rc, &pwin->rc);
-	if (pwin->style & GDI_WINCAPTION)
-	{
-		gdiCopyRect(&rt, &pwin->rc);
-		rt.h = rt.y + 11;
-		rt.x += 2;
-		rt.y += 1;
-		rc.h += 10;
-		for (i = 0; i < 11; i++)
-		{
-			gdiLine(NULL, rc.x, rc.y + i, rc.x + rc.w, rc.y + i, GDI_ROP_COPY);
-		}
-		if (pwin->style & GDI_WINCLOSEICON)
-		{
-			gdiBitBlt(&rc, rc.w - 9, 1, 10, 9, (pu8)gdiCloseBm, GDI_ROP_COPY);
-			rt.w -= 11;
-		}
-		else
-		{
-			rt.w -= 1;
-		}
-		gdiDrawText(&rt, pwin->caption, pwin->style & GDI_WINCAPTION_MASK, GDI_ROP_XOR);
-	}
-	gdiRectangleEx(&rc, GDI_ROP_COPY);
-}
+///@}
+///@}

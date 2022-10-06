@@ -17,25 +17,13 @@
 #include "stm32f4xx_tim.h"
 #include "misc.h"
 
-
 #include "video.h"
-
 /**
- * @brief Led debugging
- * 
- * @name DEBUG
+ * @addtogroup VGA-Interface
+ * @{
+ * @addtogroup Video
+ * @{
  */
-///@{
-#define GREEN			GPIO_Pin_12
-#define ORANGE			GPIO_Pin_13
-#define RED				GPIO_Pin_14
-#define BLUE			GPIO_Pin_15
-#define ALL_LEDS		(GREEN | ORANGE | RED | BLUE)		// all leds
-#define LEDS_GPIO_PORT (GPIOD)
-
-#define  LED_ON(x)        GPIO_SetBits(LEDS_GPIO_PORT, x)
-#define  LED_OFF(x)       GPIO_ResetBits(LEDS_GPIO_PORT, x)
-///@}
 
 /**
  *  Define the properties of the DMA stream we will use for
@@ -46,50 +34,51 @@
  *  SPI1_TX requests, possible choices are:
  *  DMA2, stream 3, channel 3
  *  DMA2, stream 5, channel 3.
- * 
+ *
  * @name Direct Memory Access
  */
 ///@{
-#define VIDEO_DMA				 DMA2
-#define DMA_STREAM               DMA2_Stream3
-#define DMA_CHANNEL              DMA_Channel_3
-#define DMA_STREAM_IRQ           DMA2_Stream3_IRQn
-#define DMA_IT_TCIF              DMA_IT_TCIF0
-#define DMA_STREAM_IRQHANDLER    DMA2_Stream3_IRQHandler
+#define VIDEO_DMA DMA2
+#define DMA_STREAM DMA2_Stream3
+#define DMA_CHANNEL DMA_Channel_3
+#define DMA_STREAM_IRQ DMA2_Stream3_IRQn
+#define DMA_IT_TCIF DMA_IT_TCIF0
+#define DMA_STREAM_IRQHANDLER DMA2_Stream3_IRQHandler
 ///@}
 
 /**
- *  @brief The value for VTOTAL is the number of horizontal bytes to send. 
+ *  @brief The value for VTOTAL is the number of horizontal bytes to send.
  * 	@note Plus a small addition to act as a back porch.  Sending these extra few bytes via DMA simplifies the code.
  */
-#define VTOTAL	(VID_HSIZE+2)
+#define VTOTAL (VID_HSIZE + 2)
 
 /**
  * @brief Frame buffer every bit is 1 pixel
  */
-u8	fb[VID_VSIZE][VTOTAL]  __attribute__((aligned(32)));	/* Frame buffer */
+u8 fb[VID_VSIZE][VTOTAL] __attribute__((aligned(32))); /* Frame buffer */
 
-static volatile u16 vline = 0;				/* The current line being drawn */
-static volatile u32 vflag = 0;				/* When 1, the SPI DMA request can draw on the screen */
-static volatile u32 vdraw = 0;				/* Used to increment vline every 3 drawn lines */ 
+static volatile u16 vline = 0; /* The current line being drawn */
+static volatile u32 vflag = 0; /* When 1, the SPI DMA request can draw on the screen */
+static volatile u32 vdraw = 0; /* Used to increment vline every 3 drawn lines */
 
 /**
- * @brief Configure the timer
- * 
- * @note non lo so
- * @todo write better to do
+ * @brief Configure the timer for VGA horizontal and vertical sync
  */
 void TIMER_Configuration(void)
 {
-	GPIO_InitTypeDef			GPIO_InitStructure;
-	NVIC_InitTypeDef			nvic;
-	TIM_TimeBaseInitTypeDef		TIM_TimeBaseStructure = {0,};
-	TIM_OCInitTypeDef			TIM_OCInitStructure = {0,};
-	u32							TimerPeriod = 0;
-	u16							Channel1Pulse = 0;
-	u16							Channel2Pulse = 0;
-	u16							Channel3Pulse = 0;
-	
+	GPIO_InitTypeDef GPIO_InitStructure;
+	NVIC_InitTypeDef nvic;
+	TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure = {
+		0,
+	};
+	TIM_OCInitTypeDef TIM_OCInitStructure = {
+		0,
+	};
+	u32 TimerPeriod = 0;
+	u16 Channel1Pulse = 0;
+	u16 Channel2Pulse = 0;
+	u16 Channel3Pulse = 0;
+
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1 | GPIO_Pin_8;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
@@ -97,71 +86,54 @@ void TIMER_Configuration(void)
 	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
 
-	/* Configure PA8 for Alternate Function 2 (TIM1) */
 	GPIO_PinAFConfig(GPIOA, GPIO_PinSource8, GPIO_AF_TIM1);
-
-	/* Configure PA1 for Alternate Function 2 (TIM2) */
 	GPIO_PinAFConfig(GPIOA, GPIO_PinSource1, GPIO_AF_TIM2);
 
+	/**
+	 * VGA Selected
+	 * ------------
+	 * @b SVGA 					800x600 @ 56 Hz
+	 *
+	 * @b Vertical @b refresh	35.15625 kHz
+	 *
+	 * @b Pixel @b freq.		36.0 MHz
+	 *
+	 * @b 1 @b timer @b tick 	@ 144Mhz = 6.944 ns
+	 */
 
-	/*
-		SVGA 800x600 @ 56 Hz
-		Vertical refresh	35.15625 kHz
-		Pixel freq.			36.0 MHz
-		
-		1 system tick @ 72Mhz = 0,0138 us
-	*/
-	
-	/*
-		Horizontal timing
-		-----------------
-		
-		Timer 1 period = 35156 Hz
-		
-		Timer 1 channel 1 generates a pulse for HSYNC each 28.4 us.
-		28.4 us	= Visible area + Front porch + Sync pulse + Back porch.
-		HSYNC is 2 us long, so the math to do is:
-		2us / 0,0138us = 144 system ticks.
-		
-		Timer 1 channel 2 generates a pulse equal to HSYNC + back porch.
-		This interrupt will fire the DMA request to draw on the screen if vflag == 1.
-		Since firing the DMA takes more or less 800ns, we'll add some extra time.
-		The math for HSYNC + back porch is:
-		(2us + 3,55us - dma) / 0,0138us = +-350 system ticks
-	
-		Horizontal timing info
-		----------------------
+	/**
+	 * Horizontal timing
+	 * -----------------
+	 *
+	 * Timer 1 period = 35156 Hz
+	 *
+	 * Timer 1 channel 1 generates a pulse for HSYNC each 28.4 us.
+	 * 28.4 us	= Visible area + Front porch + Sync pulse + Back porch.
+	 * 2us / 6.944ns = 288 timer ticks.
+	 *
+	 * Timer 1 channel 2 generates a pulse equal to HSYNC + back porch.
+	 * This interrupt will fire the DMA request to draw on the screen if vflag == 1.
+	 * Since firing the DMA takes more or less 800ns, we'll add some extra time.
+	 * The math for HSYNC + back porch is:
+	 * (2us + 3,55us) / 6.944ns = 800-dma timer ticks
+	 *
+	 * Horizontal timing info
+	 * ----------------------
+	 *
+	 * Type			|	Dots	|	us
+	 * -----------: | :-------: | :------
+	 * Visible area	|	800		|	22.222222222222
+	 * Front porch	|	24		|	0.66666666666667
+	 * Sync pulse	|	72		|	2				(500 kHz)
+	 * Back porch	|	128		|	3.5555555555556	(sync+back 180 kHz)
+	 * Whole line	|	1024	|	28.444444444444
+	 */
 
-						Dots	us
-		--------------------------------------------		
-		Visible area	800		22.222222222222
-		Front porch		24		0.66666666666667
-		Sync pulse		72		2
-		Back porch		128		3.5555555555556
-		Whole line		1024	28.444444444444
-	
-----------------------
-Modifications for use with STM32F4 Discovery board.
+	TimerPeriod = SystemCoreClock / 35156; // Horizontal line interval
+	Channel1Pulse = SystemCoreClock / 500000;
+	Channel2Pulse = SystemCoreClock / 180000 - 45;
 
-Timing is based on SystemCoreClock; see system_stm32f4xx.c.
-
-For proper timing, SystemCoreClock must be an even multiple of the pixel frequency!
-
-Timer 1 period = 35156 Hz = SystemCoreClock / 35156
-HSYNC period is 2 us (freq = 500 kHz) = SystemCoreClock / 500000
-HSYNC + back porch period is 2 us + 3.55 us (freq = 180.0 kHz) = SystemCoreClock / 180000
-
-*/
-
-//	TimerPeriod = 2048;
-//	Channel1Pulse = 144;		/* HSYNC */
-//	Channel2Pulse = 352; 		/* HSYNC + BACK PORCH */
-
-	TimerPeriod = SystemCoreClock / 35156;			// Ticks per whole line
-	Channel1Pulse = SystemCoreClock / 500000;		// HSYNC
-	Channel2Pulse = SystemCoreClock / 180000 -50; 		// HSYNC + BACK PORCH
-	
-	TIM_TimeBaseInit(TIM1, &TIM_TimeBaseStructure);		// always init the time base structure first!
+	TIM_TimeBaseInit(TIM1, &TIM_TimeBaseStructure);
 
 	TIM_TimeBaseStructure.TIM_Prescaler = 0;
 	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
@@ -170,60 +142,56 @@ HSYNC + back porch period is 2 us + 3.55 us (freq = 180.0 kHz) = SystemCoreClock
 	TIM_TimeBaseStructure.TIM_RepetitionCounter = 0;
 	TIM_TimeBaseInit(TIM1, &TIM_TimeBaseStructure);
 
-	TIM_OCStructInit(&TIM_OCInitStructure);		// always init the OC structure first!
+	TIM_OCStructInit(&TIM_OCInitStructure);
 
-	TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM2;	// PWM2 = clear on compare match
+	TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM2;
 	TIM_OCInitStructure.TIM_Pulse = Channel1Pulse;
 	TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
-	TIM_OCInitStructure.TIM_OutputNState = TIM_OutputState_Enable;
 	TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
-	TIM_OCInitStructure.TIM_OCNPolarity = TIM_OCPolarity_Low;
-	TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Reset;
-	TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCNIdleState_Reset;
+	TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;
 	TIM_OC1Init(TIM1, &TIM_OCInitStructure);
 
-	TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM2;	// was TIM_OCMode_Inactive
+	TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_Inactive;
 	TIM_OCInitStructure.TIM_Pulse = Channel2Pulse;
 	TIM_OC2Init(TIM1, &TIM_OCInitStructure);
 
-	TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);	// added per stm32 tutorial
-	TIM_OC2PreloadConfig(TIM1, TIM_OCPreload_Enable);	// added per stm32 tutorial
+	TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);
+	TIM_OC2PreloadConfig(TIM1, TIM_OCPreload_Enable);
 
-	TIM_ARRPreloadConfig(TIM1, ENABLE);					// added per STM32 forum
-  
-	/* TIM1 counter enable and output enable */
+	TIM_ARRPreloadConfig(TIM1, ENABLE);
+
+	// TIM1 counter enable and output enable
 	TIM_CtrlPWMOutputs(TIM1, ENABLE);
 
-	/* Select TIM1 as Master */
+	// Select TIM1 as Master
 	TIM_SelectMasterSlaveMode(TIM1, TIM_MasterSlaveMode_Enable);
 	TIM_SelectOutputTrigger(TIM1, TIM_TRGOSource_Update);
-	
-	/*
-		Vertical timing
-		---------------
-		
-		Polarity of vertical sync pulse is positive.
 
-						Lines
-		------------------------------
-		Visible area	600
-		Front porch		1
-		Sync pulse		2
-		Back porch		22
-		Whole frame		625
-		
-*/
+	/**
+	 * Vertical timing
+	 * ---------------
+	 *
+	 * Polarity of vertical sync pulse is positive.
+	 *
+	 * Type				|	Lines
+	 * ----------------	| ------------
+	 * Visible area		|	600
+	 * Front porch		|	1
+	 * Sync pulse		|	2
+	 * Back porch		|	22
+	 * Whole frame		|	625
+	 */
 
-	/* VSYNC (TIM2_CH2) and VSYNC_BACKPORCH (TIM2_CH3) */
-	/* Channel 2 and 3 Configuration in PWM mode */
+	// VSYNC (TIM2_CH2) and VSYNC_BACKPORCH (TIM2_CH3)
+	// Channel 2 and 3 Configuration in PWM mode
 	TIM_SelectSlaveMode(TIM2, TIM_SlaveMode_Gated);
 	TIM_SelectInputTrigger(TIM2, TIM_TS_ITR0);
-	
-	TimerPeriod = 625;		/* Vertical lines */
-	Channel2Pulse = 2;		/* Sync pulse */
-	Channel3Pulse = 24;		/* Sync pulse + Back porch */
 
-	TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);		// always init the time base first!
+	TimerPeriod = 625;		// Vertical lines
+	Channel2Pulse = 2;		// Sync pulse
+	Channel3Pulse = 24 + 2; // Sync pulse + Back porch
+
+	TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);
 
 	TIM_TimeBaseStructure.TIM_Prescaler = 0;
 	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
@@ -232,80 +200,68 @@ HSYNC + back porch period is 2 us + 3.55 us (freq = 180.0 kHz) = SystemCoreClock
 	TIM_TimeBaseStructure.TIM_RepetitionCounter = 0;
 	TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);
 
-	TIM_OCStructInit(&TIM_OCInitStructure);		// always init the OC structure first!
+	TIM_OCStructInit(&TIM_OCInitStructure);
 
 	TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM2;
-	TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
-	TIM_OCInitStructure.TIM_OutputNState = TIM_OutputNState_Enable;
 	TIM_OCInitStructure.TIM_Pulse = Channel2Pulse;
+	TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
 	TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
-	TIM_OCInitStructure.TIM_OCNPolarity = TIM_OCNPolarity_Low;
-	TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Reset;
-	TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCIdleState_Reset;
 	TIM_OC2Init(TIM2, &TIM_OCInitStructure);
-	
+
 	TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_Inactive;
 	TIM_OCInitStructure.TIM_Pulse = Channel3Pulse;
 	TIM_OC3Init(TIM2, &TIM_OCInitStructure);
 
-
-	/*	TIM2 counter enable and output enable */
+	//	TIM2 counter enable and output enable
 	TIM_CtrlPWMOutputs(TIM2, ENABLE);
 
-	/* Interrupt TIM2 */
+	// Interrupt TIM2
 	nvic.NVIC_IRQChannel = TIM2_IRQn;
-    nvic.NVIC_IRQChannelPreemptionPriority = 1;
-    nvic.NVIC_IRQChannelSubPriority = 0;
-    nvic.NVIC_IRQChannelCmd = ENABLE;
+	nvic.NVIC_IRQChannelPreemptionPriority = 1;
+	nvic.NVIC_IRQChannelSubPriority = 0;
+	nvic.NVIC_IRQChannelCmd = ENABLE;
 
 	NVIC_Init(&nvic);
 	TIM_ITConfig(TIM2, TIM_IT_CC3, ENABLE);
 
-	/* Interrupt TIM1 */
+	// Interrupt TIM1
 	nvic.NVIC_IRQChannel = TIM1_CC_IRQn;
-    nvic.NVIC_IRQChannelPreemptionPriority = 1;
-    nvic.NVIC_IRQChannelSubPriority = 0;
-    nvic.NVIC_IRQChannelCmd = ENABLE;
+	nvic.NVIC_IRQChannelPreemptionPriority = 1;
+	nvic.NVIC_IRQChannelSubPriority = 0;
+	nvic.NVIC_IRQChannelCmd = ENABLE;
 
 	NVIC_Init(&nvic);
 	TIM_ITConfig(TIM1, TIM_IT_CC2, ENABLE);
 
 	TIM_Cmd(TIM2, ENABLE);
 	TIM_Cmd(TIM1, ENABLE);
-
-//	while (1)  ;			// debug  stop here so we can confirm timer setup
 }
 
-
-/*
- *  For STM32F4 Discovery board, SPI1 MOSI is available on PB5 and
- *  PA7.  Since PA7 is already used for the horizontal timing, edit
- *  the original code to move SPI1 MOSI to PB5.
+/**
+ * @brief Configure SPI and DMA for a faster transition
  */
 void SPI_Configuration(void)
 {
-	NVIC_InitTypeDef		nvic;
-	SPI_InitTypeDef			SPI_InitStructure;
-	DMA_InitTypeDef			DMA_InitStructure;
-	GPIO_InitTypeDef		GPIO_InitStructure;
-	
-	GPIO_InitStructure.GPIO_Pin =  GPIO_Pin_5;
+	NVIC_InitTypeDef nvic;
+	SPI_InitTypeDef SPI_InitStructure;
+	DMA_InitTypeDef DMA_InitStructure;
+	GPIO_InitTypeDef GPIO_InitStructure;
+
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 
-	/* Configure PB5 for Alternate Function 5 (SPI1) */
 	GPIO_PinAFConfig(GPIOB, GPIO_PinSource5, GPIO_AF_SPI1);
 
 	SPI_I2S_DeInit(SPI1);
 	SPI_Cmd(SPI1, DISABLE);
 	DMA_DeInit(DMA_STREAM);
 
-
 	DMA_StructInit(&DMA_InitStructure);
 	DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)&SPI1->DR;
-	DMA_InitStructure.DMA_Memory0BaseAddr = (u32) &fb[0][0];
+	DMA_InitStructure.DMA_Memory0BaseAddr = (u32)&fb[0][0];
 	DMA_InitStructure.DMA_DIR = DMA_DIR_MemoryToPeripheral;
 	DMA_InitStructure.DMA_BufferSize = VTOTAL;
 	DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
@@ -314,8 +270,8 @@ void SPI_Configuration(void)
 	DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_Byte;
 	DMA_InitStructure.DMA_Mode = DMA_Mode_Normal;
 	DMA_InitStructure.DMA_Priority = DMA_Priority_High;
-	DMA_InitStructure.DMA_Channel = DMA_CHANNEL;		// added channel number
-	DMA_InitStructure.DMA_FIFOMode = DMA_FIFOMode_Disable;	// added FIFO mode
+	DMA_InitStructure.DMA_Channel = DMA_CHANNEL;		   // added channel number
+	DMA_InitStructure.DMA_FIFOMode = DMA_FIFOMode_Disable; // added FIFO mode
 	DMA_InitStructure.DMA_MemoryBurst = DMA_MemoryBurst_INC16;
 	DMA_InitStructure.DMA_PeripheralBurst = DMA_MemoryBurst_INC16;
 	DMA_Init(DMA_STREAM, &DMA_InitStructure);
@@ -327,11 +283,11 @@ void SPI_Configuration(void)
 	SPI_InitStructure.SPI_CPOL = SPI_CPOL_High;
 	SPI_InitStructure.SPI_CPHA = SPI_CPHA_2Edge;
 	SPI_InitStructure.SPI_NSS = SPI_NSS_Soft;
-	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_2;	
+	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_2;
 	SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
-	SPI_InitStructure.SPI_CRCPolynomial = 7;
+	SPI_InitStructure.SPI_CRCPolynomial = 0;
 	SPI_Init(SPI1, &SPI_InitStructure);
-	
+
 	SPI_CalculateCRC(SPI1, DISABLE);
 
 	nvic.NVIC_IRQChannel = DMA_STREAM_IRQ;
@@ -339,95 +295,77 @@ void SPI_Configuration(void)
 	nvic.NVIC_IRQChannelSubPriority = 0;
 	nvic.NVIC_IRQChannelCmd = ENABLE;
 	NVIC_Init(&nvic);
-	
-	DMA_STREAM->CR &= ~DMA_SxCR_EN;			// clear the EN bit to disable the stream
-	DMA_STREAM->NDTR = VTOTAL;				// set number of bytes to transfer
-	DMA_STREAM->M0AR = (u32) &fb[0][0];		// set start of frame buffer
-	
-	SPI_I2S_DMACmd(SPI1, SPI_I2S_DMAReq_Tx, ENABLE);	// allow Tx interrupt to generate DMA requests
+
+	DMA_STREAM->CR &= ~DMA_SxCR_EN;	   // clear the EN bit to disable the stream
+	DMA_STREAM->NDTR = VTOTAL;		   // set number of bytes to transfer
+	DMA_STREAM->M0AR = (u32)&fb[0][0]; // set start of frame buffer
+
+	SPI_I2S_DMACmd(SPI1, SPI_I2S_DMAReq_Tx, ENABLE); // allow Tx interrupt to generate DMA requests
 	SPI_Cmd(SPI1, ENABLE);
 
-//	while (1)						// debug  send a stream of chars out SPI
-//	{
-//		SPI1->DR = 0x55;
-//		while (SPI1->SR & SPI_FLAG_TXE == RESET)  ;
-//	}
-
 	DMA_ITConfig(DMA_STREAM, DMA_IT_TC, ENABLE);
-//	VIDEO_DMA->LIFCR = 0x003d0000;			// hard-coded clear of all DMA2 interrupt flags
-	DMA_STREAM->CR |= DMA_SxCR_EN;			// set the EN bit to enable the stream
-	LED_ON(GREEN);							// debug
+	//	VIDEO_DMA->LIFCR = 0x003d0000;			// hard-coded clear of all DMA2 interrupt flags
+	DMA_STREAM->CR |= DMA_SxCR_EN; // set the EN bit to enable the stream
 }
 
-//*****************************************************************************
-//	This irq is generated at the end of the horizontal back porch.
-//	Test if inside a valid vertical start frame (vflag variable), 
-//	and start the DMA to output a single frame buffer line through the SPI device.
-//*****************************************************************************
+/**
+ * @brief IRQ call at the end of every horizontal back porch
+ * @warning If you change anything, you should adjust Tim1 Ouput Compare 2
+ *
+ * @details Check if it is a valid vertical line and then start the stream with DMA and SPI
+ */
 void TIM1_CC_IRQHandler(void)
 {
+	TIM1->SR &= ~TIM_IT_CC2; // 0xFFFB; //~TIM_IT_CC2;
 	if (vflag)
 	{
-		// VIDEO_DMA->LIFCR = 0x003d0000;		// hard-coded clear of all DMA2 interrupt flags
-		DMA_STREAM->CR |= DMA_SxCR_EN;		// set the EN bit to enable the stream
-		// LED_ON(RED);						// debug
-		// LED_OFF(ORANGE);					// debug
+		DMA_STREAM->CR |= DMA_SxCR_EN; // set the EN bit to enable the stream
 	}
-	TIM1->SR &= ~TIM_IT_CC2;				// 0xFFFB; //~TIM_IT_CC2;
 }
 
-//*****************************************************************************
-//	This irq is generated at the end of the vertical back porch.
-//	Sets the 'vflag' variable to 1 (valid vertical frame).
-//*****************************************************************************
+/**
+ * @brief IRQ call at the end of every vertical back porch
+ * @warning  If you change anything, you should adjust Tim2 Ouput Compare 3
+ *
+ * @details Set if it is in a valid vertical frame
+ */
 void TIM2_IRQHandler(void)
 {
+	TIM2->SR &= ~TIM_IT_CC3; // 0xFFF7; //~TIM_IT_CC3;
 	vflag = 1;
-	TIM2->SR &= ~TIM_IT_CC3;				// 0xFFF7; //~TIM_IT_CC3;
 }
 
-/*
- *  DMA_STREAM_IRQHANDLER
+/**
+ * @brief IRQ call at the end of every stream transfer.
  *
- *  This code is called when a video stream transfer completes.  This
- *  code disables the stream, then updates values in the stream register
- *  to prepare the stream for the next transfer.
+ * @details This code disable the stream, then updates values in the stream register
+ * to prepare for the next stream.
  *
- *  For the STM32F4, you need to use the correct interrupt flag clear
- *  registerr when clearing the transfer complete interrupt flag.
- *  Streams 0 to 3 use DMA_LIFCR, streams 4 to 7 use DMA_HIFCR.
+ * @return At the end of the function the stream is disabled but ready
  *
- *  Clear the transfer complete status flag by writing a 1 to it.
- *
- *  Upon exit, the stream is set up but disabled.
  */
-void  DMA_STREAM_IRQHANDLER(void)
-{	
-//	VIDEO_DMA->LIFCR = 0x003d0000;			// hard-coded clear of all DMA2 interrupt flags
-	VIDEO_DMA->LIFCR = DMA_LIFCR_CTCIF3;	// clear the transfer complete interrupt flag
-	DMA_STREAM->CR &= ~DMA_SxCR_EN;			// clear the EN bit to disable the stream
-	DMA_STREAM->NDTR = VTOTAL;				// reload the number of bytes to send
-	// LED_OFF(RED);							// debug
-	// LED_ON(ORANGE);							// debug
+void DMA_STREAM_IRQHANDLER(void)
+{
+	VIDEO_DMA->LIFCR = DMA_LIFCR_CTCIF3; // clear the transfer complete interrupt flag
+	DMA_STREAM->CR &= ~DMA_SxCR_EN;		 // clear the EN bit to disable the stream
 
-	//vdraw++;
-	
-	//if (vdraw == 1)			// was 3
-	//{
-		//vdraw = 0;
+	vline++;
 
-		vline++;
-		
-		if (vline == VID_VSIZE)
-		{
-			vdraw = vline = vflag = 0;
-			DMA_STREAM->M0AR = (u32) &fb[0][0];
-		} else {
-			DMA_STREAM->M0AR += VTOTAL;
-		}
-	//}
+	if (vline == VID_VSIZE)
+	{
+		vdraw = vline = vflag = 0;
+		DMA_STREAM->M0AR = (u32)&fb[0][0];
+	}
+	else
+	{
+		DMA_STREAM->M0AR += VTOTAL;
+	}
 }
 
+/**
+ * @brief write all 0 on the frame buffer
+ *
+ */
 void vidClearScreen(void)
 {
 	u16 x, y;
@@ -443,22 +381,9 @@ void vidClearScreen(void)
 
 void vidInit(void)
 {
-/*
- *  Debug
- *
- *  Switch on the PORTD lines that control the LEDs.
- */
-	GPIO_InitTypeDef		GPIO_InitStructure;
-
-    GPIO_InitStructure.GPIO_Pin = ALL_LEDS;						// select the pins to modify
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;				// set the mode to output
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;			// set the I/O speed to 100 MHz
-    GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;				// set the output type to push-pull
-    GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;			// set the pull-up to none
-    GPIO_Init(LEDS_GPIO_PORT, &GPIO_InitStructure);				// do the init
-	LED_ON(BLUE);
-
 	SPI_Configuration();
 	TIMER_Configuration();
 	vidClearScreen();
 }
+///@}
+///@}

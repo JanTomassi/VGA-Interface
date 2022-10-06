@@ -1,5 +1,18 @@
-#include "sys.h"
+/**
+ * @file    sys.c
+ * @author  Jan Tomassi
+ * @version V0.0.1
+ * @date    02/10/2022
+ * @brief   Systimer configuration
+ */
 
+#include "sys.h"
+/**
+ * @addtogroup VGA-Interface
+ * @{
+ * @addtogroup Systimer
+ * @{
+ */
 volatile u32 sysTicks = 0;
 
 /**
@@ -31,14 +44,14 @@ u8 sysInitSystemTimer(void)
  * @brief one System clock tick
  *
  */
-inline void sysTickCount(void)
+inline void sysTickDelay(void)
 {
 	uint32_t curTicks;
 
 	curTicks = sysTicks; // Save Current SysTick Value
 	while (sysTicks == curTicks)
 	{
-		__WFE(); // Power-Down until next Event/Interrupt
+		__WFE(); 
 	}
 }
 
@@ -46,13 +59,11 @@ inline void sysTickCount(void)
  * @brief Number of system clock tick to wait
  *
  */
-void sysTickCountN(vu32 n)
+void sysTickDelayN(vu32 n)
 {
-	uint32_t curTicks;
-
 	for (; n > 0; n--)
 	{
-		sysTickCount();
+		sysTickDelay();
 	}
 }
 
@@ -60,13 +71,14 @@ void sysTickCountN(vu32 n)
  * @brief Number of Second to wait
  *
  */
-void sysTickCountS(vu32 n)
+void sysTickDelayS(vu32 n)
 {
-	uint32_t curTicks;
-	n=n*1000;
+	n = n * 1000;
 
 	for (; n > 0; n--)
 	{
-		sysTickCount();
+		sysTickDelay();
 	}
 }
+///@}
+///@}

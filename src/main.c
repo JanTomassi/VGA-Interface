@@ -11,8 +11,6 @@
 #include "video.h"
 #include "demo.h"
 
-#include "usbh_core.h"
-
 void RCC_Configuration(void)
 {
 	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_DMA2 | RCC_AHB1Periph_GPIOA | RCC_AHB1Periph_GPIOB, ENABLE);
@@ -20,7 +18,9 @@ void RCC_Configuration(void)
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1 | RCC_APB2Periph_SPI1, ENABLE);
 
-	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE); // debug only for LEDs
+#ifdef DEBUG
+	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE);
+#endif
 }
 
 int main(void)
@@ -33,5 +33,6 @@ int main(void)
 
 	demoInit();
 
-	return 0;
+	while (1)
+		__WFI();
 }

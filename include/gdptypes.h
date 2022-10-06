@@ -24,8 +24,6 @@
 #ifndef	__GDPTYPES_H
 #define	__GDPTYPES_H
 
-#define	NULL			0x0
-
 //	Types
 
 typedef	unsigned int	u32;

@@ -24,6 +24,10 @@
         "usb_core.h": "c",
         "usb_regs.h": "c",
         "usb_conf.h": "c",
-        "stm32f4xx_dma.h": "c"
+        "stm32f4xx_dma.h": "c",
+        "gdptypes.h": "c",
+        "mth.h": "c",
+        "usbh_usr.h": "c",
+        "usbh_hid_core.h": "c"
     }
 }
