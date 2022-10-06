@@ -28,6 +28,15 @@
         "gdptypes.h": "c",
         "mth.h": "c",
         "usbh_usr.h": "c",
-        "usbh_hid_core.h": "c"
+        "usbh_hid_core.h": "c",
+        "climits": "cpp",
+        "cmath": "cpp",
+        "cstdarg": "cpp",
+        "cstdint": "cpp",
+        "cstdio": "cpp",
+        "cstdlib": "cpp",
+        "type_traits": "cpp",
+        "limits": "cpp",
+        "*.tcc": "cpp"
     }
 }

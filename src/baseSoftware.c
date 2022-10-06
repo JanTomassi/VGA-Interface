@@ -1,37 +1,18 @@
-#include "demo.h"
+#include "baseSoftware.h"
 /**
  * @addtogroup VGA-Interface
  * @{
  * @addtogroup Example
  * @{
  */
-const u8 deBadBoys1[] = {0x00, 0x00,
-						 0x00, 0x00,
-						 0x07, 0xc0,
-						 0x1f, 0xf0,
-						 0x3f, 0xf8,
-						 0x33, 0x98,
-						 0x3f, 0xf8,
-						 0x0c, 0x60,
-						 0x1b, 0xb0,
-						 0x30, 0x18,
-						 0x00, 0x00,
-						 0x00, 0x00};
 
-const u8 deBadBoys2[] = {0x00, 0x00,
-						 0x00, 0x00,
-						 0x07, 0xc0,
-						 0x1f, 0xf0,
-						 0x3f, 0xf8,
-						 0x33, 0x98,
-						 0x3f, 0xf8,
-						 0x0c, 0x60,
-						 0x1b, 0xb0,
-						 0x0c, 0x60,
-						 0x00, 0x00,
-						 0x00, 0x00};
+__weak_symbol void programCallback()
+{
+	extern void Default_Handler();
+	Default_Handler();
+}
 
-void demoInit(void)
+void initProgram(void)
 {
 	vidClearScreen();
 	gdiRectangle(0, 0, (VID_PIXELS_X - 1), VID_VSIZE - 1, 0);
@@ -43,6 +24,9 @@ void demoInit(void)
 	sysTickDelayS(1);
 	gdiDrawTextEx(CHAR_ON_SCREEN_X(0), CHAR_ON_SCREEN_Y(74), (pu8) "www.github.com/JanTomassi", GDI_ROP_COPY, GDI_RIGHT_ALIGN);
 	gdiDrawTextEx(CHAR_ON_SCREEN_X(0), CHAR_ON_SCREEN_Y(74), (pu8) "Jan Tomassi", GDI_ROP_COPY, GDI_LEFT_ALIGN);
+
+	sysTickDelayS(5);
+	programCallback();
 }
 
 /**

@@ -7,9 +7,8 @@
 
 #include "sys.h"
 #include "gdi.h"
-#include "demo.h"
 #include "video.h"
-#include "demo.h"
+#include "baseSoftware.h"
 
 void RCC_Configuration(void)
 {
@@ -31,7 +30,7 @@ int main(void)
 	vidInit();
 	sysInitSystemTimer();
 
-	demoInit();
+	initProgram();
 
 	while (1)
 		__WFI();

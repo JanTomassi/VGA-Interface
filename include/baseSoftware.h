@@ -15,6 +15,7 @@
 #include "string.h"
 #include <stdlib.h>
 
-void demoInit(void);
+void initProgram(void);
+void programCallback();
 
 #endif
