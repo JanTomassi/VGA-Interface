@@ -42,10 +42,15 @@
         "scheduler.h": "c",
         "stdarg.h": "c",
 <<<<<<< HEAD
+<<<<<<< HEAD
         "stddef.h": "c",
         "stdint.h": "c"
 =======
         "stddef.h": "c"
 >>>>>>> 91c65aa (First implementation of a non preemptive Scheduler)
+=======
+        "stddef.h": "c",
+        "stdint.h": "c"
+>>>>>>> 2e4e481 (Remove unused header from scheduler)
     }
 }
