@@ -6,9 +6,6 @@
  * @brief   This file implement the timer, spi and dma configuration
  */
 
-/*
- *  Include all needed standard peripheral driver headers.
- */
 #include "stm32f4_discovery.h"
 #include "stm32f4xx_rcc.h"
 #include "stm32f4xx_gpio.h"
@@ -26,16 +23,8 @@
  */
 
 /**
- *  Define the properties of the DMA stream we will use for
- *  the VGA transfers.
- *
- *  The streams and channels available are defined by the
- *  DMA request mapping tables in the STM32F40x docs.  For
- *  SPI1_TX requests, possible choices are:
- *  DMA2, stream 3, channel 3
- *  DMA2, stream 5, channel 3.
- *
- * @name Direct Memory Access
+ * @brief Define the properties of the DMA stream we will use for
+ * the VGA transfers.
  */
 ///@{
 #define VIDEO_DMA DMA2
@@ -47,8 +36,8 @@
 ///@}
 
 /**
- *  @brief The value for VTOTAL is the number of horizontal bytes to send.
- * 	@note Plus a small addition to act as a back porch.  Sending these extra few bytes via DMA simplifies the code.
+ * @brief The value for VTOTAL is the number of horizontal bytes to send.
+ * @note Plus a small addition to act as a back porch.  Sending these extra few bytes via DMA simplifies the code.
  */
 #define VTOTAL (VID_HSIZE + 2)
 
@@ -58,8 +47,7 @@
 u8 fb[VID_VSIZE][VTOTAL] __attribute__((aligned(32))); /* Frame buffer */
 
 static volatile u16 vline = 0; /* The current line being drawn */
-static volatile u32 vflag = 0; /* When 1, the SPI DMA request can draw on the screen */
-static volatile u32 vdraw = 0; /* Used to increment vline every 3 drawn lines */
+volatile u32 vsync = 0;		   /* When 1, the SPI DMA request can draw on the screen */
 
 /**
  * @brief Configure the timer for VGA horizontal and vertical sync
@@ -112,7 +100,7 @@ void TIMER_Configuration(void)
 	 * 2us / 6.944ns = 288 timer ticks.
 	 *
 	 * Timer 1 channel 2 generates a pulse equal to HSYNC + back porch.
-	 * This interrupt will fire the DMA request to draw on the screen if vflag == 1.
+	 * This interrupt will fire the DMA request to draw on the screen if vsync == 1.
 	 * Since firing the DMA takes more or less 800ns, we'll add some extra time.
 	 * The math for HSYNC + back porch is:
 	 * (2us + 3,55us) / 6.944ns = 800-dma timer ticks
@@ -212,13 +200,12 @@ void TIMER_Configuration(void)
 	TIM_OCInitStructure.TIM_Pulse = Channel3Pulse;
 	TIM_OC3Init(TIM2, &TIM_OCInitStructure);
 
-	//	TIM2 counter enable and output enable
+	// TIM2 counter enable and output enable
 	TIM_CtrlPWMOutputs(TIM2, ENABLE);
 
 	// Interrupt TIM2
 	nvic.NVIC_IRQChannel = TIM2_IRQn;
-	nvic.NVIC_IRQChannelPreemptionPriority = 1;
-	nvic.NVIC_IRQChannelSubPriority = 0;
+	nvic.NVIC_IRQChannelPreemptionPriority = 0;
 	nvic.NVIC_IRQChannelCmd = ENABLE;
 
 	NVIC_Init(&nvic);
@@ -226,8 +213,7 @@ void TIMER_Configuration(void)
 
 	// Interrupt TIM1
 	nvic.NVIC_IRQChannel = TIM1_CC_IRQn;
-	nvic.NVIC_IRQChannelPreemptionPriority = 1;
-	nvic.NVIC_IRQChannelSubPriority = 0;
+	nvic.NVIC_IRQChannelPreemptionPriority = 0;
 	nvic.NVIC_IRQChannelCmd = ENABLE;
 
 	NVIC_Init(&nvic);
@@ -292,7 +278,6 @@ void SPI_Configuration(void)
 
 	nvic.NVIC_IRQChannel = DMA_STREAM_IRQ;
 	nvic.NVIC_IRQChannelPreemptionPriority = 0;
-	nvic.NVIC_IRQChannelSubPriority = 0;
 	nvic.NVIC_IRQChannelCmd = ENABLE;
 	NVIC_Init(&nvic);
 
@@ -304,7 +289,6 @@ void SPI_Configuration(void)
 	SPI_Cmd(SPI1, ENABLE);
 
 	DMA_ITConfig(DMA_STREAM, DMA_IT_TC, ENABLE);
-	//	VIDEO_DMA->LIFCR = 0x003d0000;			// hard-coded clear of all DMA2 interrupt flags
 	DMA_STREAM->CR |= DMA_SxCR_EN; // set the EN bit to enable the stream
 }
 
@@ -316,8 +300,8 @@ void SPI_Configuration(void)
  */
 void TIM1_CC_IRQHandler(void)
 {
-	TIM1->SR &= ~TIM_IT_CC2; // 0xFFFB; //~TIM_IT_CC2;
-	if (vflag)
+	TIM1->SR &= ~TIM_IT_CC2;
+	if (vsync)
 	{
 		DMA_STREAM->CR |= DMA_SxCR_EN; // set the EN bit to enable the stream
 	}
@@ -332,7 +316,7 @@ void TIM1_CC_IRQHandler(void)
 void TIM2_IRQHandler(void)
 {
 	TIM2->SR &= ~TIM_IT_CC3; // 0xFFF7; //~TIM_IT_CC3;
-	vflag = 1;
+	vsync = 1;
 }
 
 /**
@@ -353,7 +337,7 @@ void DMA_STREAM_IRQHANDLER(void)
 
 	if (vline == VID_VSIZE)
 	{
-		vdraw = vline = vflag = 0;
+		vline = vsync = 0;
 		DMA_STREAM->M0AR = (u32)&fb[0][0];
 	}
 	else
@@ -374,6 +358,12 @@ void vidClearScreen(void)
 	{
 		for (x = 0; x < VTOTAL; x++)
 		{
+			while (!vsync)
+				__WFI();
+
+			if (fb[y][x] == 0)
+				continue;
+
 			fb[y][x] = 0;
 		}
 	}

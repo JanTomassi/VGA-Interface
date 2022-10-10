@@ -22,6 +22,7 @@ volatile u32 sysTicks = 0;
 void SysTick_Handler(void)
 {
 	sysTicks++; // Increment Counter
+	schTickTask();
 }
 
 /**

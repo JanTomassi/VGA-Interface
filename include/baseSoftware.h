@@ -16,6 +16,6 @@
 #include <stdlib.h>
 
 void initProgram(void);
-void programCallback();
+void programCallback(void);
 
 #endif

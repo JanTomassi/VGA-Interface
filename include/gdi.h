@@ -1,42 +1,8 @@
-/***************************************************************************
- * STM32 VGA demo
- * Copyright (C) 2012 Artekit Italy
- * http://www.artekit.eu
- * Written by Ruben H. Meleca
-
-### gdi.h
-
-#   This program is free software; you can redistribute it and/or modify
-#   it under the terms of the GNU General Public License as published by
-#   the Free Software Foundation; either version 2 of the License, or
-#   (at your option) any later version.
-#
-#   This program is distributed in the hope that it will be useful,
-#   but WITHOUT ANY WARRANTY; without even the implied warranty of
-#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#   GNU General Public License for more details.
-#
-#   You should have received a copy of the GNU General Public License
-#   along with this program; if not, write to the Free Software
-#   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-
-***************************************************************************/
-
 #ifndef __GDI_H
 #define __GDI_H
 
-// #include "gdptypes.h"		// removed, use types from stm32f4xx.h instead
-/*
- *  stm32f4_discovery.h is located in Utilities/STM32F4-Discovery
- *  and defines the GPIO Pins where the leds are connected.
- *  Including this header also includes stm32f4xx.h and
- *  stm32f4xx_conf.h, which includes stm32f4xx_gpio.h
- */
 #include "stm32f4_discovery.h"
 
-/*
- *  The original Artekit code used i32, i16, and i8 for signed integers.
- */
 typedef s32 i32;
 typedef s16 i16;
 typedef s8 i8;
@@ -103,14 +69,13 @@ typedef struct
 #define CHAR_ON_SCREEN_X(x) (x << 3) + 1
 #define CHAR_ON_SCREEN_Y(y) (y << 3)
 
-enum alignment
+typedef enum alignment
 {
 	GDI_LEFT_ALIGN,
 	GDI_RIGHT_ALIGN
-};
+} GDI_ALIGNMENT;
 
 //	Function definitions
-
 void gdiGetClientRect(PGDI_WINDOW, PGDI_RECT);
 void gdiCopyRect(PGDI_RECT rc1, PGDI_RECT rc2);
 void gdiBitBlt(i16 x, i16 y, i16 w, i16 h, pu8 bm, u16 rop);
@@ -120,5 +85,8 @@ void gdiRectangle(i16 x0, i16 y0, i16 x1, i16 y1, u16 rop);
 void gdiRectangleEx(PGDI_RECT rc, u16 rop);
 void gdiCircle(u16 x, u16 y, u16 r, u16 rop);
 void gdiDrawTextEx(i16 x, i16 y, pu8 ptext, u16 rop, uint8_t alignment);
+void gdiInvertLine(u16 y);
+void gdiInvertTextLine(u16 y);
+void gdiClearTextLine(u16 y);
 
 #endif // __GDI_H

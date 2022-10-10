@@ -37,6 +37,11 @@
         "cstdlib": "cpp",
         "type_traits": "cpp",
         "limits": "cpp",
-        "*.tcc": "cpp"
+        "*.tcc": "cpp",
+        "basesoftware.h": "c",
+        "scheduler.h": "c",
+        "stdarg.h": "c",
+        "stddef.h": "c",
+        "stdint.h": "c"
     }
 }

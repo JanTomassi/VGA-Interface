@@ -9,6 +9,9 @@
 #include "gdi.h"
 #include "video.h"
 #include "baseSoftware.h"
+#include "scheduler.h"
+
+__always_inline inline void RCC_Configuration(void);
 
 void RCC_Configuration(void)
 {
@@ -17,9 +20,7 @@ void RCC_Configuration(void)
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1 | RCC_APB2Periph_SPI1, ENABLE);
 
-#ifdef DEBUG
 	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE);
-#endif
 }
 
 int main(void)
@@ -32,6 +33,12 @@ int main(void)
 
 	initProgram();
 
+	// Set the MCU to unprivileged, use the default stack pointer and disabled the FPU
+	__set_CONTROL(0x1);
+
 	while (1)
+	{
+		schRunTask();
 		__WFI();
+	}
 }

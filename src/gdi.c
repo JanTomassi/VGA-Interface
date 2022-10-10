@@ -9,10 +9,10 @@
 #include "stm32f4_discovery.h"
 
 #include "gdi.h"
-#include "mth.h"
 #include "video.h"
 #include "string.h"
 #include "font8x8.h"
+#include "sys.h"
 
 /**
  * @addtogroup VGA-Interface
@@ -24,17 +24,18 @@
 #define NULL 0
 #endif
 
+extern volatile u8 vsync;
 extern u8 fb[VID_VSIZE][VID_HSIZE + 2];
 
 const u8 gdiCloseBm[] = {0x7f, 0xC0,
-						 0x7f, 0xC0,
-						 0x7f, 0xC0,
-						 0x7f, 0xC0,
-						 0x40, 0x40,
-						 0x7f, 0xC0,
-						 0x7f, 0xC0,
-						 0x7f, 0xC0,
-						 0x7f, 0xC0};
+                         0x7f, 0xC0,
+                         0x7f, 0xC0,
+                         0x7f, 0xC0,
+                         0x40, 0x40,
+                         0x7f, 0xC0,
+                         0x7f, 0xC0,
+                         0x7f, 0xC0,
+                         0x7f, 0xC0};
 
 /**
  * @brief Copy rectangle rc2 to rc1
@@ -47,10 +48,10 @@ const u8 gdiCloseBm[] = {0x7f, 0xC0,
 void gdiCopyRect(PGDI_RECT rc1, PGDI_RECT rc2)
 {
 
-	rc1->x = rc2->x;
-	rc1->y = rc2->y;
-	rc1->w = rc2->w;
-	rc1->h = rc2->h;
+    rc1->x = rc2->x;
+    rc1->y = rc2->y;
+    rc1->w = rc2->w;
+    rc1->h = rc2->h;
 }
 
 /**
@@ -94,85 +95,88 @@ void gdiCopyRect(PGDI_RECT rc1, PGDI_RECT rc2)
 void gdiBitBlt(i16 x, i16 y, i16 w, i16 h, pu8 bm, u16 rop)
 {
 
-	u16 i, xz, xb, xt;
-	u32 wb;			// Width in bytes
-	u32 bit_number; // Start X position in bits (relative to x)
-	u32 fb_offs_in_ram;
-	u32 byte_number;
-	u32 offs;
-	u8 c;
-	pu8 fbPtr; // Pointer to the Frame Buffer Bit-Band area
-	pu8 fbBak;
-	u8 fb1;
-	u32 fb2;
-	u32 rp;
-	pu8 bmPtr; // Pointer to the bitmap bits
+    u16 i, xz, xb, xt;
+    u32 wb;         // Width in bytes
+    u32 bit_number; // Start X position in bits (relative to x)
+    u32 fb_offs_in_ram;
+    u32 byte_number;
+    u32 offs;
+    u8 c;
+    pu8 fbPtr; // Pointer to the Frame Buffer Bit-Band area
+    pu8 fbBak;
+    u8 fb1;
+    u32 fb2;
+    u32 rp;
+    pu8 bmPtr; // Pointer to the bitmap bits
 
-	//	Get total bitmap width in bytes
-	wb = (u32)w >> 3;
-	if ((wb << 3) < (u32)w)
-		++wb;
-	xt = w;
+    //	Get total bitmap width in bytes
+    wb = (u32)w >> 3;
+    if ((wb << 3) < (u32)w)
+        ++wb;
+    xt = w;
 
-	//	Get starting bit inside the first byte
-	byte_number = (u32)x >> 3;
-	bit_number = ((u32)x - (byte_number << 3));
+    //	Get starting bit inside the first byte
+    byte_number = (u32)x >> 3;
+    bit_number = ((u32)x - (byte_number << 3));
 
-	//	Draw bits
-	for (i = 0; i < h; i++)
-	{
+    //	Draw bits
+    for (i = 0; i < h; i++)
+    {
 
-		//	Clip Y
-		if ((i + y) > (VID_VSIZE - 1))
-			return;
+        //	Clip Y
+        if ((i + y) > (VID_VSIZE - 1))
+            return;
 
-		//	Get offset to frame buffer in bit-banding mode
-		offs = (((u32)x >> 3)) + ((u32)(y + i) * VID_HSIZE_R);
-		fb_offs_in_ram = (u32)(&fb - 0x20000000);
-		fb_offs_in_ram += offs;
-		fbPtr = (pu8)(0x22000000 + (fb_offs_in_ram * 32) + ((7 - bit_number) * 4));
-		fbBak = (pu8)(0x22000000 + (fb_offs_in_ram * 32) + 28);
+        //	Get offset to frame buffer in bit-banding mode
+        offs = (((u32)x >> 3)) + ((u32)(y + i) * VID_HSIZE_R);
+        fb_offs_in_ram = (u32)(&fb - 0x20000000);
+        fb_offs_in_ram += offs;
+        fbPtr = (pu8)(0x22000000 + (fb_offs_in_ram * 32) + ((7 - bit_number) * 4));
+        fbBak = (pu8)(0x22000000 + (fb_offs_in_ram * 32) + 28);
 
-		//	Get offset to bitmap bits
-		bmPtr = bm + ((u32)i * wb);
-		xz = w;
+        //	Get offset to bitmap bits
+        bmPtr = bm + ((u32)i * wb);
+        xz = w;
 
-		xb = 0;
-		for (xz = 0; xz < xt; xz++)
-		{
-			fb1 = ((u32)fbPtr) & 0x000000E0;
-			if (xb++ == 0)
-			{
-				c = *bmPtr;
-				++bmPtr;
-			}
-			xb &= 0x07;
-			(c & 0x1) ? (rp = 1) : (rp = 0);
-			switch (rop)
-			{
-			case GDI_ROP_COPY:
-				*fbPtr = rp;
-				break;
-			case GDI_ROP_XOR:
-				*fbPtr ^= rp;
-				break;
-			case GDI_ROP_AND:
-				*fbPtr &= rp;
-				break;
-			case GDI_ROP_OR:
-				*fbPtr |= rp;
-				break;
-			}
-			fbPtr -= 4;
-			fb2 = ((u32)fbPtr) & 0x000000E0;
-			if (fb1 != fb2)
-			{
-				fbPtr = fbBak + 32;
-				fbBak = fbPtr;
-			}
-			c >>= 1;
-		}
-	}
+        xb = 0;
+        for (xz = 0; xz < xt; xz++)
+        {
+            fb1 = ((u32)fbPtr) & 0x000000E0;
+            if (xb++ == 0)
+            {
+                c = *bmPtr;
+                ++bmPtr;
+            }
+            xb &= 0x07;
+            (c & 0x1) ? (rp = 1) : (rp = 0);
+
+            while (!vsync)
+                __WFI();
+            switch (rop)
+            {
+            case GDI_ROP_COPY:
+                *fbPtr = rp;
+                break;
+            case GDI_ROP_XOR:
+                *fbPtr ^= rp;
+                break;
+            case GDI_ROP_AND:
+                *fbPtr &= rp;
+                break;
+            case GDI_ROP_OR:
+                *fbPtr |= rp;
+                break;
+            }
+            fbPtr -= 4;
+            fb2 = ((u32)fbPtr) & 0x000000E0;
+            if (fb1 != fb2)
+            {
+                fbPtr = fbBak + 32;
+                fbBak = fbPtr;
+            }
+            c >>= 1;
+        }
+    }
 }
 
 /**
@@ -188,33 +192,35 @@ void gdiBitBlt(i16 x, i16 y, i16 w, i16 h, pu8 bm, u16 rop)
 void gdiPoint(PGDI_RECT rc, u16 x, u16 y, u16 rop)
 {
 
-	u16 w, r;
-	u8 m;
+    u16 w, r;
+    u8 m;
 
-	//	Test for point outside display area
+    //	Test for point outside display area
 
-	if (x >= VID_PIXELS_X || y >= VID_PIXELS_Y)
-		return;
+    if (x >= VID_PIXELS_X || y >= VID_PIXELS_Y)
+        return;
 
-	w = x >> 3;
-	r = x - (w << 3);
+    w = x >> 3;
+    r = x - (w << 3);
 
-	//	Prepare mask
+    //	Prepare mask
 
-	m = (0x80 >> r);
+    m = (0x80 >> r);
 
-	switch (rop)
-	{
-	case GDI_ROP_COPY:
-		fb[y][w] |= m;
-		break;
-	case GDI_ROP_XOR:
-		fb[y][w] ^= m;
-		break;
-	case GDI_ROP_AND:
-		fb[y][w] &= m;
-		break;
-	}
+    while (!vsync)
+        __WFI();
+    switch (rop)
+    {
+    case GDI_ROP_COPY:
+        fb[y][w] |= m;
+        break;
+    case GDI_ROP_XOR:
+        fb[y][w] ^= m;
+        break;
+    case GDI_ROP_AND:
+        fb[y][w] &= m;
+        break;
+    }
 }
 
 /**
@@ -236,68 +242,68 @@ void gdiPoint(PGDI_RECT rc, u16 x, u16 y, u16 rop)
 void gdiLine(PGDI_RECT prc, i16 x0, i16 y0, i16 x1, i16 y1, u16 rop)
 {
 
-	i16 dx, dy, i, e;
-	i16 incx, incy, inc1, inc2;
-	i16 x, y;
+    i16 dx, dy, i, e;
+    i16 incx, incy, inc1, inc2;
+    i16 x, y;
 
-	dx = x1 - x0;
-	dy = y1 - y0;
+    dx = x1 - x0;
+    dy = y1 - y0;
 
-	if (dx < 0)
-		dx = -dx;
-	if (dy < 0)
-		dy = -dy;
-	incx = 1;
-	if (x1 < x0)
-		incx = -1;
-	incy = 1;
-	if (y1 < y0)
-		incy = -1;
-	x = x0;
-	y = y0;
+    if (dx < 0)
+        dx = -dx;
+    if (dy < 0)
+        dy = -dy;
+    incx = 1;
+    if (x1 < x0)
+        incx = -1;
+    incy = 1;
+    if (y1 < y0)
+        incy = -1;
+    x = x0;
+    y = y0;
 
-	if (dx > dy)
-	{
-		gdiPoint(prc, x, y, rop);
-		e = 2 * dy - dx;
-		inc1 = 2 * (dy - dx);
-		inc2 = 2 * dy;
-		for (i = 0; i < dx; i++)
-		{
-			if (e >= 0)
-			{
-				y += incy;
-				e += inc1;
-			}
-			else
-			{
-				e += inc2;
-			}
-			x += incx;
-			gdiPoint(prc, x, y, rop);
-		}
-	}
-	else
-	{
-		gdiPoint(prc, x, y, rop);
-		e = 2 * dx - dy;
-		inc1 = 2 * (dx - dy);
-		inc2 = 2 * dx;
-		for (i = 0; i < dy; i++)
-		{
-			if (e >= 0)
-			{
-				x += incx;
-				e += inc1;
-			}
-			else
-			{
-				e += inc2;
-			}
-			y += incy;
-			gdiPoint(prc, x, y, rop);
-		}
-	}
+    if (dx > dy)
+    {
+        gdiPoint(prc, x, y, rop);
+        e = 2 * dy - dx;
+        inc1 = 2 * (dy - dx);
+        inc2 = 2 * dy;
+        for (i = 0; i < dx; i++)
+        {
+            if (e >= 0)
+            {
+                y += incy;
+                e += inc1;
+            }
+            else
+            {
+                e += inc2;
+            }
+            x += incx;
+            gdiPoint(prc, x, y, rop);
+        }
+    }
+    else
+    {
+        gdiPoint(prc, x, y, rop);
+        e = 2 * dx - dy;
+        inc1 = 2 * (dx - dy);
+        inc2 = 2 * dx;
+        for (i = 0; i < dy; i++)
+        {
+            if (e >= 0)
+            {
+                x += incx;
+                e += inc1;
+            }
+            else
+            {
+                e += inc2;
+            }
+            y += incy;
+            gdiPoint(prc, x, y, rop);
+        }
+    }
 }
 
 /**
@@ -314,10 +320,10 @@ void gdiLine(PGDI_RECT prc, i16 x0, i16 y0, i16 x1, i16 y1, u16 rop)
 void gdiRectangle(i16 x0, i16 y0, i16 x1, i16 y1, u16 rop)
 {
 
-	gdiLine(NULL, x0, y0, x1, y0, rop);
-	gdiLine(NULL, x0, y1, x1, y1, rop);
-	gdiLine(NULL, x0, y0, x0, y1, rop);
-	gdiLine(NULL, x1, y0, x1, y1, rop);
+    gdiLine(NULL, x0, y0, x1, y0, rop);
+    gdiLine(NULL, x0, y1, x1, y1, rop);
+    gdiLine(NULL, x0, y0, x0, y1, rop);
+    gdiLine(NULL, x1, y0, x1, y1, rop);
 }
 
 /**
@@ -331,31 +337,7 @@ void gdiRectangle(i16 x0, i16 y0, i16 x1, i16 y1, u16 rop)
 void gdiRectangleEx(PGDI_RECT rc, u16 rop)
 {
 
-	gdiRectangle(rc->x, rc->y, rc->x + rc->w, rc->y + rc->h, rop);
-}
-
-/**
- *	@brief Draw circle. This function uses the integer-precision math
- *
- *	@param	x			Circle center X position
- *	@param	y			Circle center Y position
- *	@param	r			Radius
- *	@param	rop			Raster operation. See GDI_ROP_xxx defines
- *
- *	@retval			none
- */
-void gdiCircle(u16 x, u16 y, u16 r, u16 rop)
-{
-
-	i32 x1, y1;
-	u16 a;
-
-	for (a = 0; a < 360; a++)
-	{
-		x1 = r * mthCos(a);
-		y1 = r * mthSin(a);
-		gdiPoint(NULL, (x1 / 10000) + x, (y1 / 10000) + y, rop);
-	}
+    gdiRectangle(rc->x, rc->y, rc->x + rc->w, rc->y + rc->h, rop);
 }
 
 /**
@@ -371,85 +353,122 @@ void gdiCircle(u16 x, u16 y, u16 r, u16 rop)
 void gdiDrawText(PGDI_RECT prc, pu8 ptext, u16 style, u16 rop)
 {
 
-	u16 l, i, pos, xp;
-	u8 c;
-	pu8 ptx;
+    u16 l, i, pos, xp;
+    u8 c;
+    pu8 ptx;
 
-	l = strlen(ptext) * GDI_SYSFONT_WIDTH;
-	switch (style)
-	{
-	case GDI_WINCAPTION_RIGHT:
-		if (l < prc->w)
-		{
-			prc->x += (prc->w - l);
-		}
-		break;
-	case GDI_WINCAPTION_CENTER:
-		if (l < prc->w)
-		{
-			prc->x += ((prc->w - l) / 2);
-		}
-		break;
-	}
-	l = strlen(ptext);
-	xp = 1; // prc->x;
-	for (i = 0; i < l; i++)
-	{
-		c = *(ptext++);
-		if (c >= GDI_SYSFONT_OFFSET)
-		{
-			pos = (u16)(c - GDI_SYSFONT_OFFSET) * GDI_SYSFONT_BYTEWIDTH * GDI_SYSFONT_HEIGHT;
-			ptx = ((pu8)gdiSystemFont) + pos;
-			gdiBitBlt(xp, 0, GDI_SYSFONT_WIDTH, GDI_SYSFONT_HEIGHT, ptx, rop);
-			xp += GDI_SYSFONT_WIDTH;
-			if (xp >= ((prc->x + prc->w) - GDI_SYSFONT_WIDTH))
-				return;
-		}
-	}
+    l = strlen(ptext) * GDI_SYSFONT_WIDTH;
+    switch (style)
+    {
+    case GDI_WINCAPTION_RIGHT:
+        if (l < prc->w)
+        {
+            prc->x += (prc->w - l);
+        }
+        break;
+    case GDI_WINCAPTION_CENTER:
+        if (l < prc->w)
+        {
+            prc->x += ((prc->w - l) / 2);
+        }
+        break;
+    }
+    l = strlen(ptext);
+    xp = 1; // prc->x;
+    for (i = 0; i < l; i++)
+    {
+        c = *(ptext++);
+        if (c >= GDI_SYSFONT_OFFSET)
+        {
+            pos = (u16)(c - GDI_SYSFONT_OFFSET) * GDI_SYSFONT_BYTEWIDTH * GDI_SYSFONT_HEIGHT;
+            ptx = ((pu8)gdiSystemFont) + pos;
+            gdiBitBlt(xp, 0, GDI_SYSFONT_WIDTH, GDI_SYSFONT_HEIGHT, ptx, rop);
+            xp += GDI_SYSFONT_WIDTH;
+            if (xp >= ((prc->x + prc->w) - GDI_SYSFONT_WIDTH))
+                return;
+        }
+    }
 }
 
 /**
- *	@brief Draw text in X/Y position using system font.
+ * @brief Draw text in X/Y position using system font.
  *
- *	@param	x		X start position
- *	@param	y		Y start position
- *	@param	ptext	Pointer to text
- *	@param	rop		Raster operation. See GDI_ROP_xxx defines
+ * @param	x		X start position
+ * @param	y		Y start position
+ * @param	ptext	Pointer to text
+ * @param	rop		Raster operation. See GDI_ROP_xxx defines
+ * @param   alignment LEFT or RIGHT alignment. See GDI_ALIGNMENT
  *
- *	@retval			none
+ * @retval			none
  */
 void gdiDrawTextEx(i16 x, i16 y, pu8 ptext, u16 rop, uint8_t alignment)
 {
-	u16 l, i, pos, xp;
-	u8 c;
-	pu8 ptx;
+    u16 l, i, pos, xp;
+    u8 c;
+    pu8 ptx;
 
-	l = strlen(ptext);
-	if (alignment == GDI_LEFT_ALIGN)
-		xp = x;
-	else if (alignment == GDI_RIGHT_ALIGN)
-		xp = VID_PIXELS_X - (x + (l * GDI_SYSFONT_WIDTH));
-	else
-		xp = x;
+    l = strlen(ptext);
+    if (alignment == GDI_LEFT_ALIGN)
+        xp = x;
+    else if (alignment == GDI_RIGHT_ALIGN)
+        xp = VID_PIXELS_X - (x + (l * GDI_SYSFONT_WIDTH));
+    else
+        xp = x;
 
-	for (i = 0; i < l; i++)
-	{
-		c = *(ptext++);
-		if (c >= GDI_SYSFONT_OFFSET)
-		{
-			pos = (u16)(c)*GDI_SYSFONT_BYTEWIDTH * GDI_SYSFONT_HEIGHT;
-			ptx = ((pu8)gdiSystemFont) + pos;
-			gdiBitBlt(xp, y, GDI_SYSFONT_WIDTH, GDI_SYSFONT_HEIGHT, ptx, rop);
+    for (i = 0; i < l; i++)
+    {
+        c = *(ptext++);
+        if (c >= GDI_SYSFONT_OFFSET)
+        {
+            pos = (u16)(c)*GDI_SYSFONT_BYTEWIDTH * GDI_SYSFONT_HEIGHT;
+            ptx = ((pu8)gdiSystemFont) + pos;
+            gdiBitBlt(xp, y, GDI_SYSFONT_WIDTH, GDI_SYSFONT_HEIGHT, ptx, rop);
 
-			if (alignment == GDI_LEFT_ALIGN)
-				xp += GDI_SYSFONT_WIDTH;
-			else if (alignment == GDI_RIGHT_ALIGN)
-				xp += GDI_SYSFONT_WIDTH;
+            if (alignment == GDI_LEFT_ALIGN)
+                xp += GDI_SYSFONT_WIDTH;
+            else if (alignment == GDI_RIGHT_ALIGN)
+                xp += GDI_SYSFONT_WIDTH;
 
-			if (xp >= VID_PIXELS_X)
-				return;
-		}
-	}
+            if (xp >= VID_PIXELS_X)
+                return;
+        }
+    }
+}
+
+void gdiInvertLine(u16 y)
+{
+    for (u16 x = 0; x < VID_HSIZE; x++)
+    {
+        while (!vsync)
+            __WFI();
+        fb[y][x] = ~fb[y][x];
+    }
+}
+
+void gdiInvertTextLine(u16 y)
+{
+    for (u16 h = y; h < y + 8; h++)
+    {
+        for (u16 w = 0; w < VID_HSIZE; w++)
+        {
+            while (!vsync)
+                __WFI();
+            fb[h][w] = ~fb[h][w];
+        }
+    }
+}
+
+void gdiClearTextLine(u16 y)
+{
+    for (u16 h = y; h < y + 8; h++)
+    {
+        for (u16 w = 0; w < VID_HSIZE; w++)
+        {
+            while (!vsync)
+                __WFI();
+            fb[h][w] = 0;
+        }
+    }
 }
 ///@}
 ///@}
