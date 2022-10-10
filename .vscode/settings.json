@@ -41,7 +41,11 @@
         "basesoftware.h": "c",
         "scheduler.h": "c",
         "stdarg.h": "c",
+<<<<<<< HEAD
         "stddef.h": "c",
         "stdint.h": "c"
+=======
+        "stddef.h": "c"
+>>>>>>> 91c65aa (First implementation of a non preemptive Scheduler)
     }
 }
