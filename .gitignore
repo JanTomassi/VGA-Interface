@@ -3,5 +3,6 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+.vscode
 doxygen/html
 compile_commands.json

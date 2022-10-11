@@ -23,12 +23,12 @@ void initProgram(void)
 {
 	vidClearScreen();
 	gdiRectangle(0, 0, (VID_PIXELS_X - 1), VID_VSIZE - 1, 0);
-	gdiDrawTextEx(CHAR_ON_SCREEN_X(5), CHAR_ON_SCREEN_Y(2), (pu8) "VGA-INTERFACE", GDI_ROP_COPY, GDI_LEFT_ALIGN);
-	gdiDrawTextEx(CHAR_ON_SCREEN_X(5), CHAR_ON_SCREEN_Y(5), (pu8) "STM32F4-DISCOVERY", GDI_ROP_COPY, GDI_LEFT_ALIGN);
+	gdiDrawTextEx(CHAR_ON_SCREEN_X(5), CHAR_ON_SCREEN_Y(2), "VGA-INTERFACE", GDI_ROP_COPY, GDI_LEFT_ALIGN);
+	gdiDrawTextEx(CHAR_ON_SCREEN_X(5), CHAR_ON_SCREEN_Y(5), "STM32F4-DISCOVERY", GDI_ROP_COPY, GDI_LEFT_ALIGN);
 
 	sysTickDelayS(1);
-	gdiDrawTextEx(CHAR_ON_SCREEN_X(0), CHAR_ON_SCREEN_Y(74), (pu8) "www.github.com/JanTomassi", GDI_ROP_COPY, GDI_RIGHT_ALIGN);
-	gdiDrawTextEx(CHAR_ON_SCREEN_X(0), CHAR_ON_SCREEN_Y(74), (pu8) "Jan Tomassi", GDI_ROP_COPY, GDI_LEFT_ALIGN);
+	gdiDrawTextEx(CHAR_ON_SCREEN_X(0), CHAR_ON_SCREEN_Y(74), "www.github.com/JanTomassi", GDI_ROP_COPY, GDI_RIGHT_ALIGN);
+	gdiDrawTextEx(CHAR_ON_SCREEN_X(0), CHAR_ON_SCREEN_Y(74), "Jan Tomassi", GDI_ROP_COPY, GDI_LEFT_ALIGN);
 
 	sysTickDelayS(5);
 	programCallback();

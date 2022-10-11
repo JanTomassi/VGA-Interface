@@ -84,7 +84,7 @@ void gdiLine(PGDI_RECT prc, i16 x0, i16 y0, i16 x1, i16 y1, u16 rop);
 void gdiRectangle(i16 x0, i16 y0, i16 x1, i16 y1, u16 rop);
 void gdiRectangleEx(PGDI_RECT rc, u16 rop);
 void gdiCircle(u16 x, u16 y, u16 r, u16 rop);
-void gdiDrawTextEx(i16 x, i16 y, pu8 ptext, u16 rop, uint8_t alignment);
+void gdiDrawTextEx(i16 x, i16 y, char* ptext, u16 rop, uint8_t alignment);
 void gdiInvertLine(u16 y);
 void gdiInvertTextLine(u16 y);
 void gdiClearTextLine(u16 y);

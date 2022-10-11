@@ -1,8 +1,9 @@
+#include "programmes.h"
+
+#include "stm32f4xx_gpio.h"
 #include "baseSoftware.h"
 #include "video.h"
 #include "scheduler.h"
-#include "programmes.h"
-#include "stm32f4xx_gpio.h"
 
 #define PROGRAM_TO_LINE(x) ((x+1) * 2)
 
@@ -23,7 +24,7 @@ typedef enum keymap{
     KEY_3 = 14,
     KEY_2 = 15,
     KEY_1 = 16
-};
+} keymap_t;
 
 u8 isFrameChanged = 1;
 
@@ -68,8 +69,8 @@ void selectorScreen(void)
         vidClearScreen();
 
         gdiDrawTextEx(CHAR_ON_SCREEN_X(5), CHAR_ON_SCREEN_Y(2), "0", GDI_ROP_OR, GDI_LEFT_ALIGN);
-        gdiDrawTextEx(CHAR_ON_SCREEN_X(5), CHAR_ON_SCREEN_Y(4), "0", GDI_ROP_OR, GDI_LEFT_ALIGN);
-        gdiDrawTextEx(CHAR_ON_SCREEN_X(5), CHAR_ON_SCREEN_Y(6), "0", GDI_ROP_OR, GDI_LEFT_ALIGN);
+        gdiDrawTextEx(CHAR_ON_SCREEN_X(5), CHAR_ON_SCREEN_Y(4), "1", GDI_ROP_OR, GDI_LEFT_ALIGN);
+        gdiDrawTextEx(CHAR_ON_SCREEN_X(5), CHAR_ON_SCREEN_Y(6), "2", GDI_ROP_OR, GDI_LEFT_ALIGN);
 
         gdiInvertTextLine(CHAR_ON_SCREEN_Y(PROGRAM_TO_LINE(programSelector)));
     }

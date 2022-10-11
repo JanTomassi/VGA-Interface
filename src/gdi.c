@@ -350,7 +350,7 @@ void gdiRectangleEx(PGDI_RECT rc, u16 rop)
  *
  *	@retval			none
  */
-void gdiDrawText(PGDI_RECT prc, pu8 ptext, u16 style, u16 rop)
+void gdiDrawText(PGDI_RECT prc, char* ptext, u16 style, u16 rop)
 {
 
     u16 l, i, pos, xp;
@@ -401,13 +401,15 @@ void gdiDrawText(PGDI_RECT prc, pu8 ptext, u16 style, u16 rop)
  *
  * @retval			none
  */
-void gdiDrawTextEx(i16 x, i16 y, pu8 ptext, u16 rop, uint8_t alignment)
+void gdiDrawTextEx(i16 x, i16 y, char* ptext, u16 rop, uint8_t alignment)
 {
     u16 l, i, pos, xp;
     u8 c;
     pu8 ptx;
 
-    l = strlen(ptext);
+    const char *cstr = ptext;
+
+    l = strlen(cstr);
     if (alignment == GDI_LEFT_ALIGN)
         xp = x;
     else if (alignment == GDI_RIGHT_ALIGN)
